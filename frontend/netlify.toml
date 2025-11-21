@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Next.js plugin configuration
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Disable blob storage for CLI deployments
+[build.processing]
+  skip_processing = false
+

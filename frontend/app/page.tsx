@@ -483,8 +483,8 @@ export default function HomePage() {
         {/* Color overlay matching site theme */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#E91E63]/20 via-[#F50057]/15 to-[#E91E63]/20 z-[1]"></div>
         {/* Content */}
-        <div className="relative z-10 container-app px-6 pt-24 pb-16 w-full">
-          <div className="max-w-3xl">
+        <div className="relative z-10 pt-24 pb-16 w-full">
+          <div className="max-w-3xl pl-8 md:pl-12 lg:pl-16">
             <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full mb-6">
               <Sparkles className="w-4 h-4" />
               <span className="text-sm font-medium">AI-Powered Campaign Planning</span>
@@ -495,7 +495,7 @@ export default function HomePage() {
             <p className="text-xl text-white/90 mb-8 drop-shadow-md">
               Discover, plan, and book advertising inventory across India with our intelligent platform
             </p>
-            <div className="flex gap-4 -ml-2">
+            <div className="flex gap-4">
               <Link 
                 href="/search"
                 className="bg-white text-[#E91E63] px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors inline-flex items-center gap-2 shadow-lg"

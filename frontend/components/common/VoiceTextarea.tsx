@@ -56,6 +56,12 @@ export default function VoiceTextarea({
         }
         recognitionRef.current = null;
       }
+      // Cleanup microphone stream
+      if ((window as any).__voiceStream) {
+        const tracks = (window as any).__voiceStream.getTracks();
+        tracks.forEach((track: MediaStreamTrack) => track.stop());
+        delete (window as any).__voiceStream;
+      }
     };
   }, []);
 

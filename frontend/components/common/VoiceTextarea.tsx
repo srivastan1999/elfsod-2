@@ -35,6 +35,7 @@ export default function VoiceTextarea({
   const finalTranscriptRef = useRef<string>('');
   const baseValueRef = useRef<string>(''); // Track value when recording starts
   const lastResultIndexRef = useRef<number>(0); // Track last processed result index
+  const isListeningRef = useRef<boolean>(false); // Track listening state for callbacks
 
   useEffect(() => {
     // Check if browser supports Speech Recognition
@@ -64,10 +65,24 @@ export default function VoiceTextarea({
 
     const Recognition = SpeechRecognition;
     const recognition = new Recognition();
+    
+    // Enhanced settings for better voice recognition
     recognition.continuous = true;
     recognition.interimResults = true;
-    // Use en-US for better browser support, fallback to en-GB or en-IN
-    recognition.lang = 'en-US'; // More widely supported
+    
+    // Try multiple language codes for better recognition
+    // en-US is most widely supported, but also try en-IN for Indian accents
+    recognition.lang = 'en-US';
+    
+    // Additional settings for better accuracy (if supported)
+    if ('maxAlternatives' in recognition) {
+      (recognition as any).maxAlternatives = 1;
+    }
+    
+    // Enable service URI for cloud-based recognition (better accuracy)
+    if ('serviceURI' in recognition) {
+      // Use default service URI for better cloud processing
+    }
 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
@@ -111,32 +126,94 @@ export default function VoiceTextarea({
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       if (event.error === 'no-speech') {
-        // No speech detected, but keep listening
+        // No speech detected, but keep listening - auto-restart after a delay
+        setTimeout(() => {
+          if (isListeningRef.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.stop();
+              const newRecognition = createRecognition();
+              if (newRecognition) {
+                recognitionRef.current = newRecognition;
+                setTimeout(() => {
+                  if (recognitionRef.current) {
+                    recognitionRef.current.start();
+                  }
+                }, 100);
+              }
+            } catch (e) {
+              console.warn('Error restarting recognition:', e);
+            }
+          }
+        }, 2000); // Restart after 2 seconds of no speech
         return;
       }
       if (event.error === 'not-allowed') {
         alert('Microphone permission denied. Please allow microphone access in your browser settings and try again.');
         setIsListening(false);
+        isListeningRef.current = false;
         finalTranscriptRef.current = '';
         setTranscript('');
       } else if (event.error === 'network') {
         alert('Network error. Please check your internet connection and try again.');
         setIsListening(false);
+        isListeningRef.current = false;
         finalTranscriptRef.current = '';
         setTranscript('');
       } else if (event.error === 'aborted') {
         // User stopped manually, don't show error
         setIsListening(false);
+        isListeningRef.current = false;
+      } else if (event.error === 'audio-capture') {
+        alert('No microphone found. Please connect a microphone and try again.');
+        setIsListening(false);
+        isListeningRef.current = false;
+        finalTranscriptRef.current = '';
+        setTranscript('');
       } else {
-        // Other errors - try to continue but log
-        console.warn('Speech recognition error (continuing):', event.error);
+        // Other errors - try to auto-restart for better reliability
+        console.warn('Speech recognition error (attempting restart):', event.error);
+        setTimeout(() => {
+          if (isListeningRef.current && recognitionRef.current) {
+            try {
+              const newRecognition = createRecognition();
+              if (newRecognition) {
+                recognitionRef.current = newRecognition;
+                setTimeout(() => {
+                  if (recognitionRef.current) {
+                    recognitionRef.current.start();
+                  }
+                }, 500);
+              }
+            } catch (e) {
+              console.error('Error restarting recognition:', e);
+            }
+          }
+        }, 1000);
       }
     };
 
     recognition.onend = () => {
-      // Don't add transcript here - it's already been added in onresult
-      // Just clear state if we're not supposed to be listening
-      if (!isListening) {
+      // Auto-restart if we're still supposed to be listening
+      if (isListeningRef.current) {
+        setTimeout(() => {
+          if (isListeningRef.current && recognitionRef.current) {
+            try {
+              const newRecognition = createRecognition();
+              if (newRecognition) {
+                recognitionRef.current = newRecognition;
+                setTimeout(() => {
+                  if (recognitionRef.current) {
+                    recognitionRef.current.start();
+                  }
+                }, 100);
+              }
+            } catch (e) {
+              console.warn('Error auto-restarting recognition:', e);
+            }
+          }
+        }, 100);
+      } else {
+        // Clear state if we're not supposed to be listening
         finalTranscriptRef.current = '';
         setTranscript('');
       }
@@ -151,10 +228,30 @@ export default function VoiceTextarea({
       return;
     }
 
-    // Request microphone permission explicitly
+    // Request microphone permission with enhanced audio constraints for better voice pickup
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .catch(() => {
+      navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100, // Higher sample rate for better quality
+          channelCount: 1, // Mono for speech recognition
+          // Additional constraints for better voice pickup
+          googEchoCancellation: true,
+          googAutoGainControl: true,
+          googNoiseSuppression: true,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true,
+          googNoiseReduction: true
+        } as any
+      })
+        .then((stream) => {
+          // Store stream reference for cleanup
+          (window as any).__voiceStream = stream;
+        })
+        .catch((error) => {
+          console.error('Microphone access error:', error);
           alert('Microphone access is required for voice input. Please allow microphone access and try again.');
         });
     }
@@ -194,6 +291,7 @@ export default function VoiceTextarea({
           if (recognitionRef.current) {
             recognitionRef.current.start();
             setIsListening(true);
+            isListeningRef.current = true;
           }
         } catch (error: any) {
           // Handle "already started" error by creating a new instance
@@ -203,11 +301,13 @@ export default function VoiceTextarea({
               recognitionRef.current = freshRecognition;
               freshRecognition.start();
               setIsListening(true);
+              isListeningRef.current = true;
             }
           } else {
             console.error('Error starting speech recognition:', error);
             alert('Could not start voice input. Please check your microphone permissions.');
             setIsListening(false);
+            isListeningRef.current = false;
           }
         }
       }, 100);
@@ -231,11 +331,19 @@ export default function VoiceTextarea({
       recognitionRef.current = null;
     }
     
+    // Stop and cleanup microphone stream
+    if ((window as any).__voiceStream) {
+      const tracks = (window as any).__voiceStream.getTracks();
+      tracks.forEach((track: MediaStreamTrack) => track.stop());
+      delete (window as any).__voiceStream;
+    }
+    
     // Don't add transcript here - it's already been added in onresult
     // The value already contains all final transcripts
     
     // Clear state
     setIsListening(false);
+    isListeningRef.current = false;
     finalTranscriptRef.current = '';
     setTranscript('');
     lastResultIndexRef.current = 0;

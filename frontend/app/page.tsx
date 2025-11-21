@@ -493,7 +493,7 @@ export default function HomePage() {
               Find Perfect Ad Spaces for Your Campaign
           </h1>
             <p className="text-xl text-white/90 mb-8 drop-shadow-md">
-              Discover, plan, and book advertising inventory across India with our intelligent platform
+              Discover, plan, and book advertising inventory across India
             </p>
             <div className="flex gap-4">
               <Link 

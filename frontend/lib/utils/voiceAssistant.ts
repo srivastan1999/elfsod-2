@@ -3,6 +3,39 @@
  * Text-to-Speech and Voice Interaction
  */
 
+// Get the best available voice for speech synthesis
+function getBestVoice(): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) return null;
+
+  // Prefer high-quality English voices
+  const preferredVoices = [
+    'Google UK English Female',
+    'Google UK English Male',
+    'Microsoft Zira - English (United States)',
+    'Microsoft David - English (United States)',
+    'Alex',
+    'Samantha',
+    'Victoria'
+  ];
+
+  // Try to find a preferred voice
+  for (const preferred of preferredVoices) {
+    const voice = voices.find(v => v.name.includes(preferred));
+    if (voice) return voice;
+  }
+
+  // Fallback to any English voice
+  const englishVoice = voices.find(v => 
+    v.lang.startsWith('en') && 
+    (v.name.includes('Female') || v.name.includes('Male') || v.name.includes('Neural'))
+  );
+  if (englishVoice) return englishVoice;
+
+  // Last resort: any English voice
+  return voices.find(v => v.lang.startsWith('en')) || voices[0];
+}
+
 export function speakText(text: string, options?: { rate?: number; pitch?: number; volume?: number }): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!('speechSynthesis' in window)) {
@@ -14,15 +47,39 @@ export function speakText(text: string, options?: { rate?: number; pitch?: numbe
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-IN'; // Indian English
-    utterance.rate = options?.rate || 0.95; // Slightly slower for natural conversation
-    utterance.pitch = options?.pitch || 1.1; // Slightly higher pitch for friendliness
-    utterance.volume = options?.volume || 1.0;
+    
+    // Try to get the best voice
+    const voices = window.speechSynthesis.getVoices();
+    const bestVoice = getBestVoice();
+    if (bestVoice) {
+      utterance.voice = bestVoice;
+      utterance.lang = bestVoice.lang;
+    } else {
+      // Fallback to standard English locales
+      utterance.lang = 'en-US'; // More widely supported than en-IN
+    }
+    
+    utterance.rate = options?.rate || 0.9; // Slightly slower for clarity
+    utterance.pitch = options?.pitch || 1.0; // Natural pitch
+    utterance.volume = options?.volume || 0.9; // Slightly lower for comfort
 
     utterance.onend = () => resolve();
     utterance.onerror = (error) => reject(error);
 
-    window.speechSynthesis.speak(utterance);
+    // Ensure voices are loaded
+    if (voices.length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const updatedVoices = window.speechSynthesis.getVoices();
+        const voice = getBestVoice();
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang;
+        }
+        window.speechSynthesis.speak(utterance);
+      };
+    } else {
+      window.speechSynthesis.speak(utterance);
+    }
   });
 }
 

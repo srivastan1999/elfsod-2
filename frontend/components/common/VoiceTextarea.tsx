@@ -66,7 +66,8 @@ export default function VoiceTextarea({
     const recognition = new Recognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-IN'; // Indian English
+    // Use en-US for better browser support, fallback to en-GB or en-IN
+    recognition.lang = 'en-US'; // More widely supported
 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
@@ -114,11 +115,22 @@ export default function VoiceTextarea({
         return;
       }
       if (event.error === 'not-allowed') {
-        alert('Microphone permission denied. Please allow microphone access and try again.');
+        alert('Microphone permission denied. Please allow microphone access in your browser settings and try again.');
+        setIsListening(false);
+        finalTranscriptRef.current = '';
+        setTranscript('');
+      } else if (event.error === 'network') {
+        alert('Network error. Please check your internet connection and try again.');
+        setIsListening(false);
+        finalTranscriptRef.current = '';
+        setTranscript('');
+      } else if (event.error === 'aborted') {
+        // User stopped manually, don't show error
+        setIsListening(false);
+      } else {
+        // Other errors - try to continue but log
+        console.warn('Speech recognition error (continuing):', event.error);
       }
-      setIsListening(false);
-      finalTranscriptRef.current = '';
-      setTranscript('');
     };
 
     recognition.onend = () => {
@@ -135,8 +147,16 @@ export default function VoiceTextarea({
 
   const startListening = () => {
     if (!isSupported) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, Safari, or a Chromium-based browser.');
       return;
+    }
+
+    // Request microphone permission explicitly
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .catch(() => {
+          alert('Microphone access is required for voice input. Please allow microphone access and try again.');
+        });
     }
 
     try {
@@ -151,14 +171,12 @@ export default function VoiceTextarea({
         recognitionRef.current = null;
       }
       
-      // Clear the textarea when starting a new recording
-      baseValueRef.current = '';
-      onChange('');
+      // Preserve existing text when starting a new recording (append mode)
+      baseValueRef.current = value || '';
       
       // Reset state
       finalTranscriptRef.current = '';
       setTranscript('');
-      lastResultIndexRef.current = 0;
       lastResultIndexRef.current = 0;
       
       // Create a new recognition instance (required for restart)
